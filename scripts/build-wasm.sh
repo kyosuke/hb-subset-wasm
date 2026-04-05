@@ -10,21 +10,13 @@ BUILD_DIR="$ROOT_DIR/build"
 
 mkdir -p "$OUT_DIR" "$BUILD_DIR"
 
-# HarfBuzz base sources (core library)
+# HarfBuzz base sources (core library — subset-only, no shaping/drawing)
 HB_BASE_SOURCES=(
-  hb-aat-layout.cc
-  hb-aat-map.cc
   hb-blob.cc
-  hb-buffer-serialize.cc
-  hb-buffer-verify.cc
   hb-buffer.cc
   hb-common.cc
-  hb-draw.cc
-  hb-paint.cc
-  hb-paint-extents.cc
   hb-face.cc
   hb-face-builder.cc
-  hb-fallback-shape.cc
   hb-font.cc
   hb-map.cc
   hb-number.cc
@@ -33,27 +25,11 @@ HB_BASE_SOURCES=(
   hb-ot-color.cc
   hb-ot-face.cc
   hb-ot-font.cc
-  hb-outline.cc
   hb-ot-layout.cc
   hb-ot-map.cc
-  hb-ot-math.cc
-  hb-ot-meta.cc
   hb-ot-metrics.cc
   hb-ot-name.cc
-  hb-ot-shaper-arabic.cc
   hb-ot-shaper-default.cc
-  hb-ot-shaper-hangul.cc
-  hb-ot-shaper-hebrew.cc
-  hb-ot-shaper-indic-table.cc
-  hb-ot-shaper-indic.cc
-  hb-ot-shaper-khmer.cc
-  hb-ot-shaper-myanmar.cc
-  hb-ot-shaper-syllabic.cc
-  hb-ot-shaper-thai.cc
-  hb-ot-shaper-use.cc
-  hb-ot-shaper-vowel-constraints.cc
-  hb-ot-shape-fallback.cc
-  hb-ot-shape-normalize.cc
   hb-ot-shape.cc
   hb-ot-tag.cc
   hb-ot-var.cc
@@ -62,10 +38,8 @@ HB_BASE_SOURCES=(
   hb-shape.cc
   hb-shaper.cc
   hb-static.cc
-  hb-style.cc
   hb-ucd.cc
   hb-unicode.cc
-  OT/Var/VARC/VARC.cc
 )
 
 # HarfBuzz subset sources
@@ -103,13 +77,30 @@ CFLAGS=(
   -DHB_NO_SETLOCALE
   -DHB_NO_AAT
   -DHB_NO_LEGACY
+  -DHB_NO_DRAW
+  -DHB_NO_PAINT
+  -DHB_NO_STYLE
+  -DHB_NO_MATH
+  -DHB_NO_META
+  -DHB_NO_HINTING
+  -DHB_NO_BITMAP
+  -DHB_NO_OT_FONT_GLYPH_NAMES
+  -DHB_NO_OT_SHAPE_FRACTIONS
+  -DHB_NO_FACE_COLLECT_UNICODES
+  -DHB_NO_VERTICAL
+  -DHB_NO_LAYOUT_FEATURE_PARAMS
+  -DHB_NO_LAYOUT_COLLECT_GLYPHS
+  -DHB_NO_LAYOUT_RARELY_USED
+  -DHB_NO_LAYOUT_UNUSED
+  -fvisibility=hidden
   -DNDEBUG
   -DHAVE_ROUND
   -DHAVE_STRTOD_L=0
   -fno-exceptions
   -fno-rtti
   -fno-threadsafe-statics
-  -Os
+  -flto
+  -Oz
 )
 
 echo "Building hb-subset.wasm (standalone)..."
@@ -136,7 +127,7 @@ echo "  Compiled ${#OBJECTS[@]} object files"
 # Step 3: Link into standalone wasm (no JS glue)
 emcc \
   "${OBJECTS[@]}" \
-  -Os \
+  -Oz \
   -flto \
   --no-entry \
   -s STANDALONE_WASM=1 \

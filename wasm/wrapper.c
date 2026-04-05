@@ -19,32 +19,6 @@ static hb_tag_t make_tag(const char *s) {
 /* --- Exported functions --- */
 
 /*
- * Create an hb_face_t from raw font data.
- * Returns NULL on failure.
- * The caller must keep font_data alive until hb_face_destroy().
- */
-__attribute__((used))
-hb_face_t* hb_wrapper_face_create(const char *font_data, unsigned int font_size) {
-    hb_blob_t *blob = hb_blob_create(font_data, font_size,
-                                      HB_MEMORY_MODE_READONLY, NULL, NULL);
-    if (!blob) return NULL;
-
-    hb_face_t *face = hb_face_create(blob, 0);
-    hb_blob_destroy(blob);
-
-    if (!face || !hb_face_get_glyph_count(face)) {
-        if (face) hb_face_destroy(face);
-        return NULL;
-    }
-    return face;
-}
-
-__attribute__((used))
-void hb_wrapper_face_destroy(hb_face_t *face) {
-    if (face) hb_face_destroy(face);
-}
-
-/*
  * Perform a subset operation.
  *
  * Parameters:
