@@ -2,14 +2,14 @@
 
 HarfBuzz font subsetting compiled to WebAssembly. Optimized for Cloudflare Workers.
 
-This is an **unofficial** package that wraps HarfBuzz's subset API in a minimal, standalone WebAssembly module. It is designed to be easy to use for common font subsetting tasks, inspired by the ergonomics of [subset-font](https://github.com/nicolo-ribaudo/subset-font).
+This is an **unofficial** package that wraps HarfBuzz's subset API in a minimal, standalone WebAssembly module. It is designed to be easy to use for common font subsetting tasks.
 
 ## Why this exists
 
 - **Not harfbuzzjs** — harfbuzzjs exposes a large, low-level HarfBuzz API. This package exposes only subsetting, with a small high-level API.
 - **Cloudflare Workers first** — standalone wasm with no JS glue code, no WASI, no filesystem access, no Node.js-specific imports. Works everywhere.
 - **Variable font support** — supports pinning variation axes and narrowing axis ranges.
-- **Composable** — output is a standard `Uint8Array` that can be piped into [woff2-encode-wasm](https://github.com/nicolo-ribaudo/woff2-enc) or any other tool.
+- **Composable** — output is a standard `Uint8Array` that can be piped into [woff2-encode-wasm](https://www.npmjs.com/package/woff2-encode-wasm) or any other tool.
 
 ## Install
 
