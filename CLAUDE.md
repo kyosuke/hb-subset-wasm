@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 hb-subset-wasm wraps HarfBuzz's font subsetting API in a standalone WebAssembly module with a minimal TypeScript API. It targets Cloudflare Workers first (no JS glue, no WASI filesystem, no Node-specific imports) but works in Node.js and browsers too.
 
+## First-time setup
+
+```bash
+# Clone with submodules (HarfBuzz source under deps/harfbuzz)
+git submodule update --init
+
+# Wasm build requires emscripten SDK (emcc must be on PATH)
+```
+
 ## Build & test commands
 
 ```bash
@@ -15,7 +24,7 @@ npm run build
 # Build only the wasm binary (requires emscripten SDK — emcc)
 npm run build:wasm
 
-# Build only TypeScript (tsc + postbuild script)
+# Build only TypeScript (tsc)
 npm run build:ts
 
 # Run tests (automatically runs pretest → full build first)
@@ -26,6 +35,9 @@ node --test --test-name-pattern="should subset by text" test/subset.test.js
 
 # Run benchmarks
 npm run bench
+
+# Cloudflare Workers e2e test (requires wrangler)
+bash test/worker-e2e/test.sh
 ```
 
 ## Architecture
