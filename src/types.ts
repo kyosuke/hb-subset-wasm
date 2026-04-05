@@ -2,14 +2,30 @@
  * Wasm source for initialization.
  *
  * - `WebAssembly.Module` — pre-compiled module (Cloudflare Workers)
- * - `BufferSource` — raw .wasm bytes (Node.js, Deno)
+ * - `ArrayBuffer | ArrayBufferView` — raw .wasm bytes (Node.js, Deno)
  * - `Response | Promise<Response>` — fetch() response (browser)
  */
+export interface ResponseLike {
+  arrayBuffer(): Promise<ArrayBuffer>;
+  clone?(): ResponseLike;
+}
+
+type RuntimeWebAssemblyModule =
+  typeof globalThis extends { WebAssembly: { Module: infer ModuleType } }
+    ? ModuleType
+    : never;
+
+type RuntimeResponse =
+  typeof globalThis extends { Response: infer ResponseType }
+    ? ResponseType
+    : ResponseLike;
+
 export type WasmSource =
-  | WebAssembly.Module
-  | BufferSource
-  | Response
-  | Promise<Response>;
+  | RuntimeWebAssemblyModule
+  | ArrayBuffer
+  | ArrayBufferView
+  | RuntimeResponse
+  | Promise<RuntimeResponse>;
 
 /**
  * Options for subsetting a font.
@@ -52,27 +68,4 @@ export interface SubsetOptions {
    * Example: `['DSIG']`
    */
   dropTables?: string[];
-}
-
-/** @internal Raw wasm exports from the standalone module. */
-export interface WasmExports {
-  memory: WebAssembly.Memory;
-  _initialize?: () => void;
-  malloc(size: number): number;
-  free(ptr: number): void;
-  hb_wrapper_subset(
-    fontDataPtr: number, fontSize: number,
-    unicodesPtr: number, unicodesLen: number,
-    glyphIdsPtr: number, glyphIdsLen: number,
-    flags: number,
-    passthroughTagsPtr: number, passthroughTagsLen: number,
-    dropTagsPtr: number, dropTagsLen: number,
-    axisTagsPtr: number, axisValuesPtr: number, axisCount: number,
-    axisRangeTagsPtr: number,
-    axisRangeMinsPtr: number, axisRangeMaxsPtr: number,
-    axisRangeDefsPtr: number, axisRangeCount: number,
-    outDataPtrPtr: number, outSizePtr: number,
-  ): number;
-  hb_wrapper_free(ptr: number): void;
-  hb_wrapper_face_get_glyph_count(fontDataPtr: number, fontSize: number): number;
 }

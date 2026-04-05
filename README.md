@@ -67,6 +67,16 @@ await init(fetch('/hb-subset.wasm'));
 const result = await subset(fontData, { text: 'Hello, world!' });
 ```
 
+## Safety limits for untrusted input
+
+When subsetting user-supplied fonts in a service:
+
+- Enforce a request/body size limit before calling `subset()`.
+- Keep memory growth bounded. `scripts/build-wasm.sh` uses `MAXIMUM_MEMORY_BYTES` (default: `268435456`, i.e. 256MiB).
+- Apply normal service safeguards (timeouts, rate limits, concurrency limits).
+
+The Worker E2E example includes a 10MiB request-body limit and returns `413` for oversized payloads.
+
 ## API
 
 ### `init(source): Promise<void>`

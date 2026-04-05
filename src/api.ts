@@ -1,4 +1,4 @@
-import type { WasmSource, SubsetOptions, WasmExports } from './types.js';
+import type { ResponseLike, SubsetOptions, WasmSource } from './types.js';
 
 // HarfBuzz subset flag constants (from hb-subset.h)
 const HB_SUBSET_FLAGS_NO_HINTING = 0x00000001;
@@ -14,12 +14,71 @@ const ERROR_MESSAGES: Record<number, string> = {
   6: 'Failed to serialize subset result',
   7: 'Subset result is empty',
   8: 'Failed to allocate output buffer — out of memory',
+  9: 'Failed to pin variation axis — invalid axis tag for this font',
+  10: 'Failed to set variation axis range — invalid axis tag or range',
 };
 
+const MAX_UNICODE_CODEPOINT = 0x10FFFF;
+const MAX_UINT32 = 0xFFFFFFFF;
+const TAG_PATTERN = /^[\x20-\x7E]{4}$/;
+
+type ImportObject = Record<string, Record<string, unknown>>;
+
+interface WasmInstanceLike {
+  exports: unknown;
+}
+
+interface WasmInstantiateResultLike {
+  instance: WasmInstanceLike;
+}
+
+interface WebAssemblyLike {
+  Module: new (...args: unknown[]) => object;
+  instantiate(
+    source: ArrayBuffer | ArrayBufferView | object,
+    importObject?: ImportObject,
+  ): Promise<WasmInstanceLike | WasmInstantiateResultLike>;
+  instantiateStreaming?: (
+    source: ResponseLike | Promise<ResponseLike>,
+    importObject?: ImportObject,
+  ) => Promise<WasmInstanceLike | WasmInstantiateResultLike>;
+}
+
+interface WasmExports {
+  memory: { buffer: ArrayBuffer };
+  _initialize?: () => void;
+  malloc(size: number): number;
+  free(ptr: number): void;
+  hb_wrapper_subset(
+    fontDataPtr: number, fontSize: number,
+    unicodesPtr: number, unicodesLen: number,
+    glyphIdsPtr: number, glyphIdsLen: number,
+    flags: number,
+    passthroughTagsPtr: number, passthroughTagsLen: number,
+    dropTagsPtr: number, dropTagsLen: number,
+    axisTagsPtr: number, axisValuesPtr: number, axisCount: number,
+    axisRangeTagsPtr: number,
+    axisRangeMinsPtr: number, axisRangeMaxsPtr: number,
+    axisRangeDefsPtr: number, axisRangeCount: number,
+    outDataPtrPtr: number, outSizePtr: number,
+  ): number;
+  hb_wrapper_free(ptr: number): void;
+  hb_wrapper_face_get_glyph_count(fontDataPtr: number, fontSize: number): number;
+}
+
 let ex: WasmExports | null = null;
+let initPromise: Promise<void> | null = null;
+
+function getRuntimeWebAssembly(): WebAssemblyLike {
+  const wasm = (globalThis as { WebAssembly?: WebAssemblyLike }).WebAssembly;
+  if (!wasm) {
+    throw new Error('WebAssembly is not available in this runtime');
+  }
+  return wasm;
+}
 
 /** Wasm import stubs — the standalone module needs only these two. */
-function buildImportObject(): WebAssembly.Imports {
+function buildImportObject(): ImportObject {
   return {
     env: {
       emscripten_notify_memory_growth: () => {},
@@ -30,6 +89,53 @@ function buildImportObject(): WebAssembly.Imports {
       },
     },
   };
+}
+
+function isBinarySource(source: WasmSource): source is ArrayBuffer | ArrayBufferView {
+  return source instanceof ArrayBuffer || ArrayBuffer.isView(source);
+}
+
+function isWasmModule(source: WasmSource, wasm: WebAssemblyLike): boolean {
+  return source instanceof wasm.Module;
+}
+
+function hasInstance(
+  result: WasmInstanceLike | WasmInstantiateResultLike,
+): result is WasmInstantiateResultLike {
+  return typeof result === 'object' && result !== null && 'instance' in result;
+}
+
+function getInstance(result: WasmInstanceLike | WasmInstantiateResultLike): WasmInstanceLike {
+  return hasInstance(result) ? result.instance : result;
+}
+
+function assertResponseLike(value: unknown): asserts value is ResponseLike {
+  if (!value || typeof value !== 'object' || typeof (value as ResponseLike).arrayBuffer !== 'function') {
+    throw new TypeError(
+      'init(source) expects a WebAssembly.Module, ArrayBuffer, ArrayBufferView, Response, or Promise<Response>',
+    );
+  }
+}
+
+function finiteNumber(name: string, value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`${name} must be a finite number`);
+  }
+  return value;
+}
+
+function integerInRange(name: string, value: unknown, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw new RangeError(`${name} must be an integer in [${min}, ${max}]`);
+  }
+  return value;
+}
+
+function validateTag(tag: unknown, field: string): string {
+  if (typeof tag !== 'string' || !TAG_PATTERN.test(tag)) {
+    throw new TypeError(`${field} must be exactly 4 printable ASCII characters`);
+  }
+  return tag;
 }
 
 /**
@@ -52,53 +158,59 @@ function buildImportObject(): WebAssembly.Imports {
  */
 export async function init(source: WasmSource): Promise<void> {
   if (ex) return;
+  if (initPromise) return initPromise;
 
-  const imports = buildImportObject();
-  let instance: WebAssembly.Instance;
+  initPromise = (async () => {
+    const wasm = getRuntimeWebAssembly();
+    const imports = buildImportObject();
+    let instance: WasmInstanceLike;
 
-  if (source instanceof WebAssembly.Module) {
-    // Pre-compiled module (Cloudflare Workers) — must use async instantiate
-    // because workerd hangs on synchronous new WebAssembly.Instance() for large modules.
-    instance = await WebAssembly.instantiate(source, imports) as unknown as WebAssembly.Instance;
-  } else if (source instanceof ArrayBuffer || ArrayBuffer.isView(source)) {
-    // Raw bytes (Node.js, Deno)
-    const bytes = source instanceof ArrayBuffer
-      ? source
-      : (source as Uint8Array).buffer.slice(
-          (source as Uint8Array).byteOffset,
-          (source as Uint8Array).byteOffset + (source as Uint8Array).byteLength,
-        );
-    const { instance: inst } = await WebAssembly.instantiate(bytes, imports) as
-      unknown as { instance: WebAssembly.Instance };
-    instance = inst;
-  } else {
-    // Response or Promise<Response> (browser fetch)
-    const response = await source;
-    if (typeof WebAssembly.instantiateStreaming === 'function') {
-      try {
-        const { instance: inst } = await WebAssembly.instantiateStreaming(response, imports) as
-          unknown as { instance: WebAssembly.Instance };
-        instance = inst;
-      } catch {
-        // Fallback if content-type isn't application/wasm
-        const buf = await response.clone().arrayBuffer();
-        const { instance: inst } = await WebAssembly.instantiate(buf, imports) as
-          unknown as { instance: WebAssembly.Instance };
-        instance = inst;
-      }
+    if (isWasmModule(source, wasm)) {
+      // Pre-compiled module (Cloudflare Workers)
+      const instantiated = await wasm.instantiate(source, imports);
+      instance = getInstance(instantiated);
+    } else if (isBinarySource(source)) {
+      // Raw bytes (Node.js, Deno)
+      const bytes = source instanceof ArrayBuffer
+        ? source
+        : source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
+      const instantiated = await wasm.instantiate(bytes, imports);
+      instance = getInstance(instantiated);
     } else {
-      const buf = await response.arrayBuffer();
-      const { instance: inst } = await WebAssembly.instantiate(buf, imports) as
-        unknown as { instance: WebAssembly.Instance };
-      instance = inst;
+      // Response or Promise<Response> (browser fetch)
+      const response = await source;
+      assertResponseLike(response);
+
+      if (typeof wasm.instantiateStreaming === 'function' && typeof response.clone === 'function') {
+        try {
+          const instantiated = await wasm.instantiateStreaming(response, imports);
+          instance = getInstance(instantiated);
+        } catch {
+          // Fallback if content-type isn't application/wasm
+          const buf = await response.clone().arrayBuffer();
+          const instantiated = await wasm.instantiate(buf, imports);
+          instance = getInstance(instantiated);
+        }
+      } else {
+        const buf = await response.arrayBuffer();
+        const instantiated = await wasm.instantiate(buf, imports);
+        instance = getInstance(instantiated);
+      }
     }
-  }
 
-  ex = instance.exports as unknown as WasmExports;
+    ex = instance.exports as WasmExports;
 
-  // STANDALONE_WASM reactors need _initialize called once
-  if (typeof ex._initialize === 'function') {
-    ex._initialize();
+    // STANDALONE_WASM reactors need _initialize called once
+    if (typeof ex._initialize === 'function') {
+      ex._initialize();
+    }
+  })();
+
+  try {
+    await initPromise;
+  } catch (error) {
+    initPromise = null;
+    throw error;
   }
 }
 
@@ -115,15 +227,15 @@ function buf(): ArrayBuffer {
 }
 
 /**
- * Encode a 4-character tag string to bytes. Pads with spaces if shorter.
+ * Encode a 4-character OpenType tag string to bytes.
  */
 function encodeTag(tag: string): [number, number, number, number] {
-  const padded = (tag + '    ').slice(0, 4);
+  validateTag(tag, 'tag');
   return [
-    padded.charCodeAt(0),
-    padded.charCodeAt(1),
-    padded.charCodeAt(2),
-    padded.charCodeAt(3),
+    tag.charCodeAt(0),
+    tag.charCodeAt(1),
+    tag.charCodeAt(2),
+    tag.charCodeAt(3),
   ];
 }
 
@@ -138,8 +250,42 @@ export async function subset(
   fontData: Uint8Array | ArrayBuffer,
   options: SubsetOptions,
 ): Promise<Uint8Array> {
+  if (!options || typeof options !== 'object') {
+    throw new TypeError('options must be an object');
+  }
+  if (options.text !== undefined && typeof options.text !== 'string') {
+    throw new TypeError('text must be a string');
+  }
+  if (options.unicodes !== undefined && !Array.isArray(options.unicodes)) {
+    throw new TypeError('unicodes must be an array of integers');
+  }
+  if (options.glyphIds !== undefined && !Array.isArray(options.glyphIds)) {
+    throw new TypeError('glyphIds must be an array of integers');
+  }
+  if (options.retainGids !== undefined && typeof options.retainGids !== 'boolean') {
+    throw new TypeError('retainGids must be a boolean');
+  }
+  if (options.noHinting !== undefined && typeof options.noHinting !== 'boolean') {
+    throw new TypeError('noHinting must be a boolean');
+  }
+  if (options.passthroughTables !== undefined && !Array.isArray(options.passthroughTables)) {
+    throw new TypeError('passthroughTables must be an array of OpenType tags');
+  }
+  if (options.dropTables !== undefined && !Array.isArray(options.dropTables)) {
+    throw new TypeError('dropTables must be an array of OpenType tags');
+  }
+  if (
+    options.variationAxes !== undefined
+    && (typeof options.variationAxes !== 'object' || options.variationAxes === null || Array.isArray(options.variationAxes))
+  ) {
+    throw new TypeError('variationAxes must be an object mapping axis tags to numbers or ranges');
+  }
+
   const m = getWasm();
   const font = fontData instanceof Uint8Array ? fontData : new Uint8Array(fontData);
+  if (font.length === 0) {
+    throw new RangeError('fontData must not be empty');
+  }
 
   // Collect all unicode codepoints
   const unicodes: number[] = [];
@@ -150,10 +296,14 @@ export async function subset(
     }
   }
   if (options.unicodes) {
-    for (const cp of options.unicodes) unicodes.push(cp);
+    options.unicodes.forEach((cp, index) => {
+      unicodes.push(integerInRange(`unicodes[${index}]`, cp, 0, MAX_UNICODE_CODEPOINT));
+    });
   }
 
-  const glyphIds = options.glyphIds ?? [];
+  const glyphIds = (options.glyphIds ?? []).map((gid, index) =>
+    integerInRange(`glyphIds[${index}]`, gid, 0, MAX_UINT32),
+  );
 
   if (unicodes.length === 0 && glyphIds.length === 0) {
     throw new Error('At least one of text, unicodes, or glyphIds must be provided');
@@ -173,23 +323,56 @@ export async function subset(
   const rangeDefs: number[] = [];
 
   if (options.variationAxes) {
-    for (const [tag, value] of Object.entries(options.variationAxes)) {
+    for (const [rawTag, rawValue] of Object.entries(options.variationAxes)) {
+      const tag = validateTag(rawTag, `variationAxes key "${rawTag}"`);
       const encoded = encodeTag(tag);
-      if (typeof value === 'number') {
+
+      if (typeof rawValue === 'number') {
         pinTags.push(encoded);
-        pinValues.push(value);
-      } else {
-        rangeTags.push(encoded);
-        rangeMins.push(value.min ?? -Infinity);
-        rangeMaxs.push(value.max ?? Infinity);
-        rangeDefs.push(value.default ?? NaN);
+        pinValues.push(finiteNumber(`variationAxes.${tag}`, rawValue));
+        continue;
       }
+
+      if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) {
+        throw new TypeError(`variationAxes.${tag} must be a finite number or { min?, max?, default? }`);
+      }
+
+      const hasMin = rawValue.min !== undefined;
+      const hasMax = rawValue.max !== undefined;
+      const hasDefault = rawValue.default !== undefined;
+
+      if (!hasMin && !hasMax && !hasDefault) {
+        throw new TypeError(`variationAxes.${tag} must specify at least one of min, max, or default`);
+      }
+
+      const min = hasMin ? finiteNumber(`variationAxes.${tag}.min`, rawValue.min) : Number.NaN;
+      const max = hasMax ? finiteNumber(`variationAxes.${tag}.max`, rawValue.max) : Number.NaN;
+      const def = hasDefault ? finiteNumber(`variationAxes.${tag}.default`, rawValue.default) : Number.NaN;
+
+      if (!Number.isNaN(min) && !Number.isNaN(max) && min > max) {
+        throw new RangeError(`variationAxes.${tag}.min must be <= variationAxes.${tag}.max`);
+      }
+      if (!Number.isNaN(def) && !Number.isNaN(min) && def < min) {
+        throw new RangeError(`variationAxes.${tag}.default must be >= variationAxes.${tag}.min`);
+      }
+      if (!Number.isNaN(def) && !Number.isNaN(max) && def > max) {
+        throw new RangeError(`variationAxes.${tag}.default must be <= variationAxes.${tag}.max`);
+      }
+
+      rangeTags.push(encoded);
+      rangeMins.push(min);
+      rangeMaxs.push(max);
+      rangeDefs.push(def);
     }
   }
 
   // Prepare tag arrays
-  const passthroughTags = (options.passthroughTables ?? []).map(encodeTag);
-  const dropTags = (options.dropTables ?? []).map(encodeTag);
+  const passthroughTags = (options.passthroughTables ?? []).map((tag, index) =>
+    encodeTag(validateTag(tag, `passthroughTables[${index}]`)),
+  );
+  const dropTags = (options.dropTables ?? []).map((tag, index) =>
+    encodeTag(validateTag(tag, `dropTables[${index}]`)),
+  );
 
   // --- Allocate wasm memory ---
   const allocations: number[] = [];

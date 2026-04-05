@@ -6,6 +6,14 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = join(__dirname, 'fixtures');
+const wasmPath = join(__dirname, '..', 'dist', 'hb-subset.wasm');
+const regularFontPath = join(fixturesDir, 'Roboto-Regular.abc.ttf');
+
+function importFreshModule() {
+  const fresh = new URL('../dist/api.js', import.meta.url);
+  fresh.searchParams.set('fresh', `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  return import(fresh.href);
+}
 
 // Dynamic import of the built module
 let init, subset;
@@ -15,7 +23,6 @@ before(async () => {
   init = mod.init;
   subset = mod.subset;
   // Load wasm binary and pass as BufferSource (Node.js path)
-  const wasmPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'hb-subset.wasm');
   const wasmBinary = await readFile(wasmPath);
   await init(wasmBinary);
 });
@@ -139,9 +146,12 @@ describe('subset', () => {
 
   describe('error handling', () => {
     it('should throw if not initialized', async () => {
-      // We can't truly test this since init() was already called,
-      // but we test the error message format
-      assert.ok(typeof subset === 'function');
+      const mod = await importFreshModule();
+      const font = await readFile(regularFontPath);
+      await assert.rejects(
+        () => mod.subset(font, { text: 'a' }),
+        { message: /not initialized/ },
+      );
     });
 
     it('should throw on empty options', async () => {
@@ -161,8 +171,92 @@ describe('subset', () => {
     it('should throw on empty font data', async () => {
       await assert.rejects(
         () => subset(new Uint8Array(0), { text: 'a' }),
-        { message: /Subset failed/ },
+        { message: /fontData must not be empty/ },
       );
+    });
+
+    it('should throw on invalid unicode codepoint', async () => {
+      await assert.rejects(
+        () => subset(regularFont, { unicodes: [-1] }),
+        { message: /unicodes\[0\] must be an integer/ },
+      );
+    });
+
+    it('should throw on invalid glyph ID', async () => {
+      await assert.rejects(
+        () => subset(regularFont, { glyphIds: [1.5] }),
+        { message: /glyphIds\[0\] must be an integer/ },
+      );
+    });
+
+    it('should throw on malformed OpenType tag', async () => {
+      await assert.rejects(
+        () => subset(regularFont, { text: 'a', passthroughTables: ['GS'] }),
+        { message: /passthroughTables\[0\] must be exactly 4 printable ASCII characters/ },
+      );
+    });
+
+    it('should throw on invalid variation axis range', async () => {
+      await assert.rejects(
+        () => subset(regularFont, { text: 'a', variationAxes: { wght: { min: 700, max: 300 } } }),
+        { message: /variationAxes\.wght\.min must be <= variationAxes\.wght\.max/ },
+      );
+    });
+
+    it('should surface pin-axis failures from HarfBuzz', async () => {
+      await assert.rejects(
+        () => subset(variableFont, { text: 'A', variationAxes: { xxxx: 400 } }),
+        { message: /Failed to pin variation axis/ },
+      );
+    });
+
+    it('should surface axis-range failures from HarfBuzz', async () => {
+      await assert.rejects(
+        () => subset(variableFont, { text: 'A', variationAxes: { xxxx: { min: 300, max: 500 } } }),
+        { message: /Failed to set variation axis range/ },
+      );
+    });
+  });
+
+  describe('initialization paths', () => {
+    it('should be safe when init is called concurrently', async () => {
+      const mod = await importFreshModule();
+      const wasmBinary = await readFile(wasmPath);
+      const font = await readFile(regularFontPath);
+
+      await Promise.all([mod.init(wasmBinary), mod.init(wasmBinary), mod.init(wasmBinary)]);
+      const result = await mod.subset(font, { text: 'a' });
+
+      assert.ok(result instanceof Uint8Array);
+      assert.ok(result.length > 0);
+    });
+
+    it('should initialize from WebAssembly.Module', async () => {
+      const mod = await importFreshModule();
+      const wasmBinary = await readFile(wasmPath);
+      const wasmModule = await WebAssembly.compile(wasmBinary);
+      const font = await readFile(regularFontPath);
+
+      await mod.init(wasmModule);
+      const result = await mod.subset(font, { text: 'a' });
+
+      assert.ok(result instanceof Uint8Array);
+      assert.ok(result.length > 0);
+    });
+
+    it('should initialize from Response', async () => {
+      const mod = await importFreshModule();
+      const wasmBinary = await readFile(wasmPath);
+      const font = await readFile(regularFontPath);
+      const response = new Response(wasmBinary, {
+        headers: { 'content-type': 'application/octet-stream' },
+      });
+
+      await mod.init(response);
+      const result = await mod.subset(font, { text: 'a' });
+
+      assert.ok(result instanceof Uint8Array);
+      assert.ok(result.length > 0);
     });
   });
 

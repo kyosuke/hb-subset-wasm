@@ -113,7 +113,11 @@ int hb_wrapper_subset(
     if (axis_tags && axis_values && axis_count > 0) {
         for (unsigned int i = 0; i < axis_count; i++) {
             hb_tag_t tag = make_tag(axis_tags + i * 4);
-            hb_subset_input_pin_axis_location(input, face, tag, axis_values[i]);
+            if (!hb_subset_input_pin_axis_location(input, face, tag, axis_values[i])) {
+                hb_subset_input_destroy(input);
+                hb_face_destroy(face);
+                return 9;
+            }
         }
     }
 
@@ -121,10 +125,14 @@ int hb_wrapper_subset(
     if (axis_range_tags && axis_range_mins && axis_range_maxs && axis_range_defs && axis_range_count > 0) {
         for (unsigned int i = 0; i < axis_range_count; i++) {
             hb_tag_t tag = make_tag(axis_range_tags + i * 4);
-            hb_subset_input_set_axis_range(input, face, tag,
-                                           axis_range_mins[i],
-                                           axis_range_maxs[i],
-                                           axis_range_defs[i]);
+            if (!hb_subset_input_set_axis_range(input, face, tag,
+                                                axis_range_mins[i],
+                                                axis_range_maxs[i],
+                                                axis_range_defs[i])) {
+                hb_subset_input_destroy(input);
+                hb_face_destroy(face);
+                return 10;
+            }
         }
     }
 

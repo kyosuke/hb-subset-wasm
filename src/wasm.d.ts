@@ -7,5 +7,10 @@
  * await init(wasmModule);
  * ```
  */
-declare const wasmModule: WebAssembly.Module;
+type RuntimeWasmModule =
+  typeof globalThis extends { WebAssembly: { Module: infer ModuleType } }
+    ? ModuleType
+    : unknown;
+
+declare const wasmModule: RuntimeWasmModule;
 export default wasmModule;

@@ -2,6 +2,42 @@ import { init, subset } from '../../dist/index.js';
 import wasmModule from '../../dist/hb-subset.wasm';
 
 const ready = init(wasmModule);
+const MAX_FONT_BYTES = 10 * 1024 * 1024;
+
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+async function readFontData(request) {
+  const contentLengthHeader = request.headers.get('content-length');
+  if (contentLengthHeader !== null) {
+    const contentLength = Number(contentLengthHeader);
+    if (!Number.isFinite(contentLength) || contentLength < 0) {
+      throw httpError(400, 'Invalid Content-Length header');
+    }
+    if (contentLength > MAX_FONT_BYTES) {
+      throw httpError(413, `Font payload exceeds ${MAX_FONT_BYTES} bytes`);
+    }
+  }
+
+  const fontData = new Uint8Array(await request.arrayBuffer());
+  if (fontData.length === 0) {
+    throw httpError(400, 'Font payload must not be empty');
+  }
+  if (fontData.length > MAX_FONT_BYTES) {
+    throw httpError(413, `Font payload exceeds ${MAX_FONT_BYTES} bytes`);
+  }
+
+  return fontData;
+}
+
+function errorResponse(error) {
+  const status = typeof error?.status === 'number' ? error.status : 500;
+  const message = error instanceof Error ? error.message : String(error);
+  return Response.json({ ok: false, error: message }, { status });
+}
 
 export default {
   async fetch(request) {
@@ -17,7 +53,7 @@ export default {
 
     if (path === '/subset') {
       try {
-        const fontData = new Uint8Array(await request.arrayBuffer());
+        const fontData = await readFontData(request);
         const text = url.searchParams.get('text') || 'Hello';
         const result = await subset(fontData, { text });
         return Response.json({
@@ -27,13 +63,13 @@ export default {
           ratio: (result.length / fontData.length * 100).toFixed(1) + '%',
         });
       } catch (e) {
-        return Response.json({ ok: false, error: e.message }, { status: 500 });
+        return errorResponse(e);
       }
     }
 
     if (path === '/subset/varfont') {
       try {
-        const fontData = new Uint8Array(await request.arrayBuffer());
+        const fontData = await readFontData(request);
         const text = url.searchParams.get('text') || 'ABC';
         const pinWght = url.searchParams.get('wght');
         const options = { text };
@@ -48,7 +84,7 @@ export default {
           pinnedWght: pinWght || null,
         });
       } catch (e) {
-        return Response.json({ ok: false, error: e.message }, { status: 500 });
+        return errorResponse(e);
       }
     }
 

@@ -7,6 +7,9 @@ HB_DIR="$ROOT_DIR/deps/harfbuzz/src"
 WRAPPER="$ROOT_DIR/wasm/wrapper.c"
 OUT_DIR="$ROOT_DIR/dist"
 BUILD_DIR="$ROOT_DIR/build"
+INITIAL_MEMORY_BYTES=2097152
+STACK_SIZE_BYTES=65536
+MAXIMUM_MEMORY_BYTES="${MAXIMUM_MEMORY_BYTES:-268435456}"
 
 mkdir -p "$OUT_DIR" "$BUILD_DIR"
 
@@ -105,20 +108,77 @@ CFLAGS=(
 
 echo "Building hb-subset.wasm (standalone)..."
 
+if ! [[ "$MAXIMUM_MEMORY_BYTES" =~ ^[0-9]+$ ]]; then
+  echo "MAXIMUM_MEMORY_BYTES must be a positive integer (bytes), got: $MAXIMUM_MEMORY_BYTES" >&2
+  exit 1
+fi
+if (( MAXIMUM_MEMORY_BYTES < INITIAL_MEMORY_BYTES )); then
+  echo "MAXIMUM_MEMORY_BYTES ($MAXIMUM_MEMORY_BYTES) must be >= INITIAL_MEMORY_BYTES ($INITIAL_MEMORY_BYTES)" >&2
+  exit 1
+fi
+
+FLAGS_STAMP="$BUILD_DIR/.compile-flags.sha256"
+FLAGS_HASH="$(
+  {
+    printf '%s\n' "${CFLAGS[@]}"
+    printf 'EMCC=%s\n' "$(emcc --version | head -n 1)"
+  } | shasum -a 256 | awk '{print $1}'
+)"
+FORCE_REBUILD=0
+if [ ! -f "$FLAGS_STAMP" ] || [ "$(cat "$FLAGS_STAMP")" != "$FLAGS_HASH" ]; then
+  FORCE_REBUILD=1
+  printf '%s' "$FLAGS_HASH" > "$FLAGS_STAMP"
+  echo "  Detected compiler flag/toolchain change; rebuilding all objects"
+fi
+
+dep_paths_from_file() {
+  local dep_file="$1"
+  awk '
+    {
+      gsub(/\\/, "", $0);
+      if (NR == 1) sub(/^[^:]*:[[:space:]]*/, "", $0);
+      n = split($0, parts, /[[:space:]]+/);
+      for (i = 1; i <= n; i++) {
+        if (parts[i] != "") print parts[i];
+      }
+    }
+  ' "$dep_file"
+}
+
+needs_rebuild() {
+  local src="$1"
+  local obj="$2"
+  local dep="$3"
+
+  if [ "$FORCE_REBUILD" -eq 1 ] || [ ! -f "$obj" ] || [ ! -f "$dep" ] || [ "$src" -nt "$obj" ]; then
+    return 0
+  fi
+
+  while IFS= read -r dep_path; do
+    if [ -f "$dep_path" ] && [ "$dep_path" -nt "$obj" ]; then
+      return 0
+    fi
+  done < <(dep_paths_from_file "$dep")
+
+  return 1
+}
+
 # Step 1: Compile .cc sources to .o
 OBJECTS=()
 for src in "${HB_BASE_SOURCES[@]}" "${HB_SUBSET_SOURCES[@]}"; do
   obj="$BUILD_DIR/$(echo "$src" | tr '/' '_').o"
-  if [ ! -f "$obj" ] || [ "$HB_DIR/$src" -nt "$obj" ]; then
-    emcc "${CFLAGS[@]}" -Wno-macro-redefined -c "$HB_DIR/$src" -o "$obj"
+  dep="$BUILD_DIR/$(echo "$src" | tr '/' '_').d"
+  if needs_rebuild "$HB_DIR/$src" "$obj" "$dep"; then
+    emcc "${CFLAGS[@]}" -Wno-macro-redefined -MMD -MF "$dep" -c "$HB_DIR/$src" -o "$obj"
   fi
   OBJECTS+=("$obj")
 done
 
 # Step 2: Compile wrapper.c
 WRAPPER_OBJ="$BUILD_DIR/wrapper.o"
-if [ ! -f "$WRAPPER_OBJ" ] || [ "$WRAPPER" -nt "$WRAPPER_OBJ" ]; then
-  emcc "${CFLAGS[@]}" -c "$WRAPPER" -o "$WRAPPER_OBJ"
+WRAPPER_DEP="$BUILD_DIR/wrapper.d"
+if needs_rebuild "$WRAPPER" "$WRAPPER_OBJ" "$WRAPPER_DEP"; then
+  emcc "${CFLAGS[@]}" -MMD -MF "$WRAPPER_DEP" -c "$WRAPPER" -o "$WRAPPER_OBJ"
 fi
 OBJECTS+=("$WRAPPER_OBJ")
 
@@ -133,8 +193,9 @@ emcc \
   -s STANDALONE_WASM=1 \
   -s FILESYSTEM=0 \
   -s ALLOW_MEMORY_GROWTH=1 \
-  -s INITIAL_MEMORY=2097152 \
-  -s STACK_SIZE=65536 \
+  -s INITIAL_MEMORY="$INITIAL_MEMORY_BYTES" \
+  -s MAXIMUM_MEMORY="$MAXIMUM_MEMORY_BYTES" \
+  -s STACK_SIZE="$STACK_SIZE_BYTES" \
   -s MALLOC=emmalloc \
   -s EXPORTED_FUNCTIONS='["_hb_wrapper_subset","_hb_wrapper_free","_hb_wrapper_face_get_glyph_count","_malloc","_free"]' \
   -o "$OUT_DIR/hb-subset.wasm"

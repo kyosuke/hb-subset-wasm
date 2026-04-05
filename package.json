@@ -22,7 +22,7 @@
   ],
   "scripts": {
     "build:wasm": "bash scripts/build-wasm.sh",
-    "build:ts": "tsc && node scripts/postbuild.mjs",
+    "build:ts": "tsc",
     "build": "npm run build:wasm && npm run build:ts",
     "test": "node --test test/*.test.js",
     "pretest": "npm run build",
