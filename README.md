@@ -57,16 +57,6 @@ const fontData = new Uint8Array(/* ... your .ttf or .otf bytes ... */);
 const result = await subset(fontData, { text: 'Hello, world!' });
 ```
 
-### Browser
-
-```ts
-import { init, subset } from 'hb-subset-wasm';
-
-await init(fetch('/hb-subset.wasm'));
-
-const result = await subset(fontData, { text: 'Hello, world!' });
-```
-
 ## Safety limits for untrusted input
 
 When subsetting user-supplied fonts in a service:
