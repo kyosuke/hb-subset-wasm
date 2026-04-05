@@ -1,0 +1,48 @@
+{
+  "name": "hb-subset-wasm",
+  "version": "0.1.0",
+  "description": "HarfBuzz font subsetting compiled to WebAssembly — optimized for Cloudflare Workers",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./wasm": {
+      "types": "./src/wasm.d.ts",
+      "default": "./dist/hb-subset.wasm"
+    }
+  },
+  "files": [
+    "dist",
+    "src/wasm.d.ts"
+  ],
+  "scripts": {
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "build:ts": "tsc && node scripts/postbuild.mjs",
+    "build": "npm run build:wasm && npm run build:ts",
+    "test": "node --test test/*.test.js",
+    "pretest": "npm run build",
+    "bench": "node bench/bench.js"
+  },
+  "keywords": [
+    "harfbuzz",
+    "font",
+    "subset",
+    "wasm",
+    "webassembly",
+    "cloudflare-workers",
+    "font-subsetting",
+    "variable-fonts",
+    "opentype"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
