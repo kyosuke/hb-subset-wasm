@@ -17,7 +17,8 @@
   },
   "files": [
     "dist",
-    "src/wasm.d.ts"
+    "src/wasm.d.ts",
+    "THIRD_PARTY_NOTICES"
   ],
   "scripts": {
     "build:wasm": "bash scripts/build-wasm.sh",
@@ -25,6 +26,7 @@
     "build": "npm run build:wasm && npm run build:ts",
     "test": "node --test test/*.test.js",
     "pretest": "npm run build",
+    "prepublishOnly": "npm run build && npm test",
     "bench": "node bench/bench.js"
   },
   "keywords": [
@@ -38,7 +40,16 @@
     "variable-fonts",
     "opentype"
   ],
+  "author": "Kyosuke Nakamura",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kyosuke/hb-subset-wasm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kyosuke/hb-subset-wasm/issues"
+  },
+  "homepage": "https://github.com/kyosuke/hb-subset-wasm#readme",
   "devDependencies": {
     "typescript": "^6.0.2"
   },

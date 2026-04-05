@@ -17,6 +17,8 @@ This is an **unofficial** package that wraps HarfBuzz's subset API in a minimal,
 npm install hb-subset-wasm
 ```
 
+> **Note:** This package is ESM-only.
+
 ## Quick start
 
 ### Cloudflare Workers
@@ -137,7 +139,7 @@ const woff2Font = await encode(subsetFont);
 
 ## Performance
 
-On a test machine (Apple Silicon), subsetting a small font takes approximately **0.05ms per operation**. The wasm binary is ~744KB (standalone, no JS glue).
+On a test machine (Apple Silicon), subsetting a small font takes approximately **0.05ms per operation**. The wasm binary is ~577KB (standalone, no JS glue).
 
 ## Limitations
 
@@ -153,4 +155,4 @@ Built against HarfBuzz 10.4.0. The HarfBuzz source is included as a git submodul
 
 ## License
 
-MIT (this package). HarfBuzz itself is licensed under the [Old MIT license](https://github.com/harfbuzz/harfbuzz/blob/main/COPYING).
+MIT (this package). HarfBuzz itself is licensed under the [Old MIT license](https://github.com/harfbuzz/harfbuzz/blob/main/COPYING). See [THIRD_PARTY_NOTICES](./THIRD_PARTY_NOTICES) for full details.
