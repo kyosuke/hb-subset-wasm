@@ -11,19 +11,18 @@
       "import": "./dist/index.js"
     },
     "./wasm": {
-      "types": "./src/wasm.d.ts",
+      "types": "./dist/wasm.d.ts",
       "default": "./dist/hb-subset.wasm"
     }
   },
   "files": [
     "dist",
-    "src/wasm.d.ts",
     "THIRD_PARTY_NOTICES"
   ],
   "scripts": {
     "build:wasm": "bash scripts/build-wasm.sh",
-    "build:ts": "tsc",
-    "build": "npm run build:wasm && npm run build:ts",
+    "build:ts": "tsc && cp src/wasm.d.ts dist/wasm.d.ts",
+    "build": "rm -rf dist && npm run build:wasm && npm run build:ts",
     "test": "node --test test/*.test.js",
     "pretest": "npm run build",
     "prepublishOnly": "npm run build && npm test",
