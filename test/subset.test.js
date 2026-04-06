@@ -336,6 +336,62 @@ describe('subset', () => {
     });
   });
 
+  describe('layoutFeatures', () => {
+    let notoFont;
+
+    before(async () => {
+      notoFont = await readFile(join(fixturesDir, 'NotoSansJP-VF.otf'));
+    });
+
+    it('should retain all layout features with "*"', async () => {
+      const defaultResult = await subset(notoFont, { text: 'こんにちは' });
+      const allFeatures = await subset(notoFont, { text: 'こんにちは', layoutFeatures: '*' });
+      assert.ok(allFeatures instanceof Uint8Array);
+      assert.ok(allFeatures.length > 0);
+      // Retaining all features should produce equal or larger output
+      assert.ok(allFeatures.length >= defaultResult.length,
+        `Expected allFeatures (${allFeatures.length}) >= default (${defaultResult.length})`);
+    });
+
+    it('should retain specific layout features by tag', async () => {
+      const defaultResult = await subset(notoFont, { text: 'こんにちは' });
+      const withPalt = await subset(notoFont, { text: 'こんにちは', layoutFeatures: ['palt'] });
+      assert.ok(withPalt instanceof Uint8Array);
+      assert.ok(withPalt.length > 0);
+      // Adding palt back should produce equal or larger output
+      assert.ok(withPalt.length >= defaultResult.length,
+        `Expected withPalt (${withPalt.length}) >= default (${defaultResult.length})`);
+    });
+
+    it('should retain multiple specific layout features', async () => {
+      const withOne = await subset(notoFont, { text: 'こんにちは', layoutFeatures: ['palt'] });
+      const withMultiple = await subset(notoFont, { text: 'こんにちは', layoutFeatures: ['palt', 'mark', 'vert'] });
+      assert.ok(withMultiple instanceof Uint8Array);
+      assert.ok(withMultiple.length >= withOne.length,
+        `Expected withMultiple (${withMultiple.length}) >= withOne (${withOne.length})`);
+    });
+
+    it('should keep default behavior when layoutFeatures is undefined', async () => {
+      const withoutOption = await subset(notoFont, { text: 'こんにちは' });
+      const withUndefined = await subset(notoFont, { text: 'こんにちは', layoutFeatures: undefined });
+      assert.equal(withoutOption.length, withUndefined.length);
+    });
+
+    it('should throw on invalid layoutFeatures value', async () => {
+      await assert.rejects(
+        () => subset(notoFont, { text: 'あ', layoutFeatures: 42 }),
+        { message: /layoutFeatures must be '\*' or an array of OpenType tags/ },
+      );
+    });
+
+    it('should throw on invalid tag in layoutFeatures array', async () => {
+      await assert.rejects(
+        () => subset(notoFont, { text: 'あ', layoutFeatures: ['pa'] }),
+        { message: /layoutFeatures\[0\] must be exactly 4 printable ASCII characters/ },
+      );
+    });
+  });
+
   describe('combined options', () => {
     it('should combine text and unicodes', async () => {
       const result = await subset(regularFont, {

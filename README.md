@@ -95,6 +95,7 @@ Subset a font. Returns the subsetted font as a `Uint8Array`.
 | `variationAxes` | `Record<string, number \| {min?, max?, default?}>` | Pin or narrow variation axes |
 | `passthroughTables` | `string[]` | Table tags to pass through without subsetting |
 | `dropTables` | `string[]` | Table tags to drop entirely |
+| `layoutFeatures` | `'*' \| string[]` | Layout feature tags to retain (see below) |
 
 At least one of `text`, `unicodes`, or `glyphIds` must be provided.
 
@@ -120,6 +121,30 @@ const result = await subset(fontData, {
   },
 });
 ```
+
+## Layout features
+
+By default, HarfBuzz drops some GPOS/GSUB layout features during subsetting (e.g. `palt`, `mark`, `vert`). Use `layoutFeatures` to control which features are retained.
+
+Retain all layout features:
+
+```ts
+const result = await subset(fontData, {
+  text: 'こんにちは',
+  layoutFeatures: '*',
+});
+```
+
+Retain specific features:
+
+```ts
+const result = await subset(fontData, {
+  text: 'こんにちは',
+  layoutFeatures: ['palt', 'mark'],
+});
+```
+
+Omitting `layoutFeatures` preserves the default HarfBuzz behavior (backward compatible).
 
 ## Composing with WOFF2 encoding
 

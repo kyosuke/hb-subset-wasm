@@ -68,4 +68,15 @@ export interface SubsetOptions {
    * Example: `['DSIG']`
    */
   dropTables?: string[];
+  /**
+   * Layout feature tags to retain in the subset.
+   *
+   * By default HarfBuzz drops some features (e.g. `palt`, `mark`, `vert`).
+   *
+   * - `'*'` — retain all layout features (nothing is dropped).
+   * - `string[]` — add specific tags to the default retained set.
+   *   Example: `['palt', 'mark']`
+   * - `undefined` — keep HarfBuzz default behavior.
+   */
+  layoutFeatures?: '*' | string[];
 }

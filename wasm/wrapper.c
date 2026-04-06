@@ -48,6 +48,8 @@ int hb_wrapper_subset(
     const float *axis_range_mins, const float *axis_range_maxs,
     const float *axis_range_defs,
     unsigned int axis_range_count,
+    const char *layout_feature_tags, unsigned int layout_feature_tags_len,
+    unsigned int layout_features_all,
     char **out_data, unsigned int *out_size
 ) {
     *out_data = NULL;
@@ -133,6 +135,20 @@ int hb_wrapper_subset(
                 hb_face_destroy(face);
                 return 10;
             }
+        }
+    }
+
+    /* Layout feature tags */
+    if (layout_features_all) {
+        /* Keep all layout features (clear drop list, then invert = keep everything) */
+        hb_set_t *features = hb_subset_input_set(input, HB_SUBSET_SETS_LAYOUT_FEATURE_TAG);
+        hb_set_clear(features);
+        hb_set_invert(features);
+    } else if (layout_feature_tags && layout_feature_tags_len > 0) {
+        /* Add specific tags to the retained set */
+        hb_set_t *features = hb_subset_input_set(input, HB_SUBSET_SETS_LAYOUT_FEATURE_TAG);
+        for (unsigned int i = 0; i < layout_feature_tags_len; i++) {
+            hb_set_add(features, make_tag(layout_feature_tags + i * 4));
         }
     }
 

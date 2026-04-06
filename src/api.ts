@@ -60,6 +60,8 @@ interface WasmExports {
     axisRangeTagsPtr: number,
     axisRangeMinsPtr: number, axisRangeMaxsPtr: number,
     axisRangeDefsPtr: number, axisRangeCount: number,
+    layoutFeatureTagsPtr: number, layoutFeatureTagsLen: number,
+    layoutFeaturesAll: number,
     outDataPtrPtr: number, outSizePtr: number,
   ): number;
   hb_wrapper_free(ptr: number): void;
@@ -280,6 +282,13 @@ export async function subset(
   ) {
     throw new TypeError('variationAxes must be an object mapping axis tags to numbers or ranges');
   }
+  if (
+    options.layoutFeatures !== undefined
+    && options.layoutFeatures !== '*'
+    && !Array.isArray(options.layoutFeatures)
+  ) {
+    throw new TypeError("layoutFeatures must be '*' or an array of OpenType tags");
+  }
 
   const m = getWasm();
   const font = fontData instanceof Uint8Array ? fontData : new Uint8Array(fontData);
@@ -374,6 +383,12 @@ export async function subset(
     encodeTag(validateTag(tag, `dropTables[${index}]`)),
   );
 
+  // Prepare layout feature tags
+  const layoutFeaturesAll = options.layoutFeatures === '*' ? 1 : 0;
+  const layoutFeatureTags = (Array.isArray(options.layoutFeatures) ? options.layoutFeatures : []).map(
+    (tag, index) => encodeTag(validateTag(tag, `layoutFeatures[${index}]`)),
+  );
+
   // --- Allocate wasm memory ---
   const allocations: number[] = [];
 
@@ -438,6 +453,10 @@ export async function subset(
       new Float32Array(buf(), rangeDefsPtr, rangeTags.length).set(rangeDefs);
     }
 
+    // Layout feature tags
+    const layoutFeaturesPtr = walloc(layoutFeatureTags.length * 4);
+    if (layoutFeatureTags.length > 0) writeTags(layoutFeatureTags, layoutFeaturesPtr);
+
     // Output pointers (pointer to pointer + size)
     const outDataPtrPtr = walloc(4);
     const outSizePtr = walloc(4);
@@ -452,6 +471,7 @@ export async function subset(
       dropPtr, dropTags.length,
       pinTagsPtr, pinValuesPtr, pinTags.length,
       rangeTagsPtr, rangeMinsPtr, rangeMaxsPtr, rangeDefsPtr, rangeTags.length,
+      layoutFeaturesPtr, layoutFeatureTags.length, layoutFeaturesAll,
       outDataPtrPtr, outSizePtr,
     );
 
