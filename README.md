@@ -25,7 +25,7 @@ npm install hb-subset-wasm
 
 ```ts
 import { init, subset } from 'hb-subset-wasm';
-import wasmModule from 'hb-subset-wasm/wasm';
+import wasmModule from 'hb-subset-wasm/hb-subset.wasm';
 
 const ready = init(wasmModule);
 

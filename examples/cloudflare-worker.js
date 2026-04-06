@@ -5,7 +5,7 @@
  * via Wrangler's CompiledWasm rule — no JS glue, no Node.js imports.
  */
 import { init, subset } from 'hb-subset-wasm';
-import wasmModule from 'hb-subset-wasm/wasm';
+import wasmModule from 'hb-subset-wasm/hb-subset.wasm';
 
 // Initialize once at module scope
 const ready = init(wasmModule);

@@ -3,7 +3,7 @@
  *
  * In Cloudflare Workers, import this directly:
  * ```ts
- * import wasmModule from 'hb-subset-wasm/wasm';
+ * import wasmModule from 'hb-subset-wasm/hb-subset.wasm';
  * await init(wasmModule);
  * ```
  */

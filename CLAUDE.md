@@ -58,7 +58,7 @@ The package has two layers:
 ### Package exports
 
 - `hb-subset-wasm` → `dist/index.js` (init + subset)
-- `hb-subset-wasm/wasm` → `dist/hb-subset.wasm` (raw wasm binary, typed as `WebAssembly.Module` for Cloudflare Workers)
+- `hb-subset-wasm/hb-subset.wasm` → `dist/hb-subset.wasm` (raw wasm binary, typed as `WebAssembly.Module` for Cloudflare Workers)
 
 ## Testing
 

@@ -147,7 +147,7 @@ function validateTag(tag: unknown, field: string): string {
  *
  * ```ts
  * // Cloudflare Workers — pre-compiled module (fastest)
- * import wasmModule from 'hb-subset-wasm/wasm';
+ * import wasmModule from 'hb-subset-wasm/hb-subset.wasm';
  * await init(wasmModule);
  *
  * // Node.js — raw bytes
