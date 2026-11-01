@@ -1,6 +1,6 @@
 {
   "name": "hb-subset-wasm",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "HarfBuzz font subsetting compiled to WebAssembly — optimized for Cloudflare Workers",
   "type": "module",
   "main": "./dist/index.js",
