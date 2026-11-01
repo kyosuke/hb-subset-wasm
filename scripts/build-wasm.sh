@@ -55,8 +55,17 @@ HB_SUBSET_SOURCES=(
   hb-subset-instancer-iup.cc
   hb-subset-instancer-solver.cc
   hb-subset-plan.cc
+  hb-subset-plan-layout.cc
+  hb-subset-plan-var.cc
   hb-subset-serialize.cc
+  hb-subset-table-cff.cc
+  hb-subset-table-color.cc
+  hb-subset-table-layout.cc
+  hb-subset-table-other.cc
+  hb-subset-table-var.cc
+  hb-depend.cc
   graph/gsubgpos-context.cc
+  OT/Var/VARC/VARC.cc
 )
 
 # Common compile flags
@@ -95,6 +104,7 @@ CFLAGS=(
   -DHB_NO_LAYOUT_COLLECT_GLYPHS
   -DHB_NO_LAYOUT_RARELY_USED
   -DHB_NO_LAYOUT_UNUSED
+  -DHB_NO_BEYOND_64K
   -fvisibility=hidden
   -DNDEBUG
   -DHAVE_ROUND

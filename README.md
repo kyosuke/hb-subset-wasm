@@ -124,7 +124,7 @@ const result = await subset(fontData, {
 
 ## Layout features
 
-By default, HarfBuzz drops some GPOS/GSUB layout features during subsetting (e.g. `palt`, `mark`, `vert`). Use `layoutFeatures` to control which features are retained.
+By default, HarfBuzz retains only a default set of GPOS/GSUB layout features (common ones such as `liga`, `kern`, `mark`, `vert`, `palt`) and drops the rest (e.g. `ss01`, `salt`, `smcp`). Use `layoutFeatures` to control which features are retained.
 
 Retain all layout features:
 
@@ -164,7 +164,7 @@ const woff2Font = await encode(subsetFont);
 
 ## Performance
 
-On a test machine (Apple Silicon), subsetting a small font takes approximately **0.05ms per operation**. The wasm binary is ~577KB (standalone, no JS glue).
+On a test machine (Apple Silicon), subsetting a small font takes approximately **0.05ms per operation**. The wasm binary is ~730KB (~280KB gzipped; standalone, no JS glue).
 
 ## Limitations
 
@@ -176,7 +176,7 @@ On a test machine (Apple Silicon), subsetting a small font takes approximately *
 
 ## HarfBuzz version
 
-Built against HarfBuzz 10.4.0. The HarfBuzz source is included as a git submodule under `deps/harfbuzz`.
+Built against HarfBuzz 15.0.0. The HarfBuzz source is included as a git submodule under `deps/harfbuzz`.
 
 ## License
 
