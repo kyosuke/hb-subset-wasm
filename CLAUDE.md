@@ -53,7 +53,7 @@ The package has two layers:
 
 ### Wasm build pipeline
 
-`scripts/build-wasm.sh` compiles HarfBuzz sources (from `deps/harfbuzz` git submodule, pinned to 10.4.0) + `wasm/wrapper.c` using emscripten (`emcc`). Object files are cached in `build/`. Output goes to `dist/hb-subset.wasm`. Key build choices: standalone wasm (`--no-entry`, `STANDALONE_WASM=1`), emmalloc allocator, aggressive size optimization (`-Os`, `-flto`, many `HB_NO_*` defines).
+`scripts/build-wasm.sh` compiles HarfBuzz sources (from `deps/harfbuzz` git submodule, pinned to 15.0.0) + `wasm/wrapper.c` using emscripten (`emcc`). Object files are cached in `build/`. Output goes to `dist/hb-subset.wasm`. Key build choices: standalone wasm (`--no-entry`, `STANDALONE_WASM=1`), emmalloc allocator, aggressive size optimization (`-Os`, `-flto`, many `HB_NO_*` defines).
 
 ### Package exports
 
