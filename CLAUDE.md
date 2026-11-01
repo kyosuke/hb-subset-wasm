@@ -12,7 +12,7 @@ hb-subset-wasm wraps HarfBuzz's font subsetting API in a standalone WebAssembly 
 # Clone with submodules (HarfBuzz source under deps/harfbuzz)
 git submodule update --init
 
-# Wasm build requires emscripten SDK (emcc must be on PATH)
+# Wasm build requires emscripten SDK (emcc must be on PATH; CI pins 6.0.13)
 ```
 
 ## Build & test commands
